@@ -7,17 +7,10 @@ A real-time ECG and respiration monitoring system using ESP32 and Flask, integra
 This project allows users to stream ECG and respiration signals wirelessly from an ESP32 board to a web dashboard via WebSocket, visualize data in real time, record sessions, and automatically analyze the recorded ECG data using selected AI models.
 
 Features
-
-Real-time ECG & respiration signal visualization (50 Hz sampling rate)
-
-Data acquisition via ESP32 + ADS1292R
-
-WebSocket communication and Flask backend
-
-Model selection dropdown (MAE, BERT, Conformer, Fold4)
-
-Automatic ECG beat classification and diagnosis summary
-
-Downloadable CSV recordings and model outputs
-
-Clean light-mode web dashboard built with Bootstrap 5 & Chart.js
+1. Real-time ECG & respiration signal visualization (50 Hz sampling rate)
+2. Data acquisition via ESP32 + ADS1292R
+3. WebSocket communication and Flask backend
+4. Model selection dropdown (MAE, BERT, Conformer, Fold4)
+5. Automatic ECG beat classification and diagnosis summary
+6. Downloadable CSV recordings and model outputs
+7. Clean light-mode web dashboard built with Bootstrap 5 & Chart.js
