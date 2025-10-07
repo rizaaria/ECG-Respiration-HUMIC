@@ -1,18 +1,50 @@
 # Smart-ECG-AI
-Real-time ECG &amp; respiration monitoring using ADS1922R with ESP32, Flask, SD Card Logger, and multi-model AI heartbeat analysis (MAE, BERT, Conformer).
+**Real-Time ECG and Respiration Monitoring with Multi-Model AI Analysis**
 
-Smart-ECG-AI
-A real-time ECG and respiration monitoring system using ESP32 and Flask, integrated with multiple deep learning models (MAE, BERT, Conformer) for heartbeat classification and diagnosis visualization.
+Smart-ECG-AI is a real-time biomedical signal monitoring system that acquires ECG and respiration signals using an ESP32 + ADS1292R module, streams them to a Flask web dashboard via WebSocket, and performs automatic ECG beat classification using multiple deep learning models (MAE, BERT, Conformer).
 
-This project allows users to stream ECG and respiration signals wirelessly from an ESP32 board to a web dashboard via WebSocket, visualize data in real time, record sessions, and automatically analyze the recorded ECG data using selected AI models.
+---
 
-Features
-1. Real-time ECG & respiration signal visualization (50 Hz sampling rate)
-2. Data acquisition via ESP32 + ADS1292R
-3. WebSocket communication and Flask backend
-4. Model selection dropdown (MAE, BERT, Conformer, Fold4)
-5. Automatic ECG beat classification and diagnosis summary
-6. Downloadable CSV recordings and model outputs
-7. Clean light-mode web dashboard built with Bootstrap 5 & Chart.js
+##  Features
+-  **Wireless streaming** of ECG and respiration data from ESP32 to a web dashboard.
+-  **Real-time visualization** using Chart.js.
+-  **Multi-model analysis**: choose between MAE, BERT, and Conformer.
+-  **AI classification** of ECG beats into clinical categories:
+  - N (Normal Beat)
+  - R (Right Bundle Branch Block)
+  - L (Left Bundle Branch Block)
+  - V (Ventricular Ectopic Beat)
+  - Q (Unclassifiable Beat)
+-  **Data recording** in `.csv` format.
+-  **Flask + WebSocket backend** for efficient bi-directional data handling.
+-  **Clean light-mode web UI** built with Bootstrap 5.
+
+---
+
+##  System Architecture
+```text
+ESP32 (ADS1292R) → Wi-Fi → Flask WebSocket Server → Realtime Dashboard
+                                              ↘
+                                                AI Model (MAE / BERT / Conformer)
+
+
+## Web Dashboard Preview
+![Dashboard Preview 1](images/dashboard_preview1.png)
+![Dashboard Preview 2](images/dashboard_preview2.png)
+![Dashboard Preview 3](images/dashboard_preview3.png)
+
+## Pretrained Models
+
+All model weights are stored externally due to GitHub size limitations.
+
+| Model       | Description |
+|--------------|-------------|
+| MAE | Masked Autoencoder ECG classifier |
+| Fold4 | Transformer-based ECG model |
+| Conformer | Convolutional Transformer model |
+| BERT | ECG-BERT classification model |
+[Download](https://drive.google.com/drive/folders/1B4qpE2LI5TFhc7Kf0wdkXOwgabYEUR69?usp=sharing) |
+
+After downloading, place each model into its corresponding folder under `/mae/weight/`, `/fold4/weight/`, `/conformer/weight/`, and `/bert/weight/`.
 
 Use ECG_HUMIK2.py

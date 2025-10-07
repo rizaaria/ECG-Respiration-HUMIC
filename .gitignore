@@ -1,1 +1,85 @@
 # Ignore model weights and recordings
+
+# ===================================
+# 🧠 Smart ECG AI Project - .gitignore
+# ===================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.egg-info/
+*.log
+
+# --- Virtual Environment ---
+.venv/
+env/
+venv/
+ENV/
+*.env
+
+# --- Flask Cache & Compiled Files ---
+instance/
+.cache/
+__pycache__/
+*.sqlite3
+*.db
+
+# --- Jupyter / Notebook ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- Model Weights & Checkpoints ---
+*/weight/*
+!*/weight/README.md
+*.pth
+*.pt
+*.safetensors
+*.ckpt
+*.onnx
+
+# --- Data & Recordings ---
+recordings/
+datasets/
+*.csv
+*.npy
+*.npz
+*.mat
+*.h5
+
+# --- Build / Distribution / Logs ---
+build/
+dist/
+*.egg
+*.egg-info/
+*.manifest
+*.spec
+*.bak
+*.tmp
+*.swp
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- VSCode / IDE Files ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Git LFS backup (just in case) ---
+.gitattributes
+.git/lfs/
+
+# --- Backup ---
+*.old
+*.backup
+*.orig
+
+# --- Misc ---
+logs/
+temp/
+tmp/
