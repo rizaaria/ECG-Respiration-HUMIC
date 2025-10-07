@@ -22,11 +22,9 @@ Smart-ECG-AI is a real-time biomedical signal monitoring system that acquires EC
 ---
 
 ##  System Architecture
-```text
 ESP32 (ADS1292R) → Wi-Fi → Flask WebSocket Server → Realtime Dashboard
                                               ↘
                                                 AI Model (MAE / BERT / Conformer)
-```text
 
 ## Web Dashboard Preview
 ![Dashboard Preview 1](images/dashboard_preview1.png)
