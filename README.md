@@ -14,3 +14,5 @@ Features
 5. Automatic ECG beat classification and diagnosis summary
 6. Downloadable CSV recordings and model outputs
 7. Clean light-mode web dashboard built with Bootstrap 5 & Chart.js
+
+Use ECG_HUMIK2.py
