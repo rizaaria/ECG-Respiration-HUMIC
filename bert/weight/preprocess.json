@@ -1,7 +1,0 @@
-{
-  "max_length": 512,
-  "normalize": "minmax_0_255_int", 
-  "base_model": "bert-base-uncased",
-  "segment_sec": 0.7,
-  "fs": 360
-}
