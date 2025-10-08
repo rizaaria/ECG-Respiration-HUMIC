@@ -205,8 +205,8 @@ INDEX_HTML = """
 <style>
   body {
     font-family: 'Segoe UI', sans-serif;
-    background: #f8f9fa;         
-    color: #212529;            
+    background: #f8f9fa;
+    color: #212529;
     padding: 24px;
   }
   .card {
@@ -217,21 +217,21 @@ INDEX_HTML = """
   }
   h2 {
     text-align: center;
-    color: #007bff;               
+    color: #007bff;
     font-weight: 700;
     margin-bottom: 12px;
   }
   canvas {
     margin-top: 10px;
-    background: #ffffff;         
+    background: #ffffff;
     border-radius: 10px;
-    border: 1px solid #ddd;       
+    border: 1px solid #ddd;
   }
   .controls > * {
     margin-right: 10px;
   }
   #ecgWrap, #respWrap {
-    height: 260px;                
+    height: 260px;
   }
   #respWrap {
     height: 200px;
@@ -303,7 +303,19 @@ INDEX_HTML = """
   const ecgChart = new Chart(ecgCtx, {
     type:'line',
     data: ecgData,
-    options: { responsive:true, maintainAspectRatio:false, scales:{ x:{ display:false }, y:{ min:-600, max:600 } }, plugins:{ legend:{ display:false } } }
+    options: { 
+      responsive:true, 
+      maintainAspectRatio:false, 
+      scales:{
+        x:{
+          display:true,
+          title:{ display:true, text:'Waktu (detik)' },
+          ticks:{ autoSkip:true, maxTicksLimit:10 }
+        },
+        y:{ min:-600, max:600 }
+      }, 
+      plugins:{ legend:{ display:false } } 
+    }
   });
 
   // Resp chart
@@ -312,20 +324,33 @@ INDEX_HTML = """
   const respChart = new Chart(respCtx, {
     type:'line',
     data: respData,
-    options: { responsive:true, maintainAspectRatio:false, scales:{ x:{ display:false }, y:{ min:-5, max:5 } }, plugins:{ legend:{ display:false } } }
+    options: { 
+      responsive:true, 
+      maintainAspectRatio:false, 
+      scales:{
+        x:{
+          display:true,
+          title:{ display:true, text:'Waktu (detik)' },
+          ticks:{ autoSkip:true, maxTicksLimit:10 }
+        },
+        y:{ min:-5, max:5 }
+      }, 
+      plugins:{ legend:{ display:false } } 
+    }
   });
 
   // SSE stream
-  let t0 = null;
+  let startTime = null;
   const evt = new EventSource('/stream');
   evt.onmessage = e => {
     const obj = JSON.parse(e.data);
-    if (t0 === null) t0 = obj.recv_time;
-    const t = (obj.recv_time - t0).toFixed(2);
+
+    // waktu relatif (detik utuh)
+    if (startTime === null) startTime = Date.now();
+    const t = Math.floor((Date.now() - startTime) / 1000);
 
     ecgData.labels.push(t);
     ecgData.datasets[0].data.push(obj.ecg);
-
     respData.labels.push(t);
     respData.datasets[0].data.push(obj.resp ?? 0);
 
@@ -334,6 +359,20 @@ INDEX_HTML = """
       ecgData.labels.shift(); ecgData.datasets[0].data.shift();
       respData.labels.shift(); respData.datasets[0].data.shift();
     }
+
+    // sumbu Y dinamis
+    const ecgVals = ecgData.datasets[0].data;
+    const ecgMin = Math.min(...ecgVals);
+    const ecgMax = Math.max(...ecgVals);
+    ecgChart.options.scales.y.min = Math.min(-600, ecgMin - 50);
+    ecgChart.options.scales.y.max = Math.max(600, ecgMax + 50);
+
+    const respVals = respData.datasets[0].data;
+    const respMin = Math.min(...respVals);
+    const respMax = Math.max(...respVals);
+    respChart.options.scales.y.min = Math.min(-5, respMin - 0.5);
+    respChart.options.scales.y.max = Math.max(5, respMax + 0.5);
+
     ecgChart.update('none');
     respChart.update('none');
   };
