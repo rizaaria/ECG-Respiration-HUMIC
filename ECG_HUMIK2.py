@@ -44,11 +44,6 @@ def load_model(model_name: str):
         runner, label_map, id2label = load_mae_model("mae/weight", device=device)
         return {"type": "mae", "runner": runner, "id2label": id2label}
 
-    elif model_name == "bert":
-        from bert.loader import BertBeatModel
-        runner = BertBeatModel("bert/weight")
-        return {"type": "bert", "runner": runner, "id2label": runner.id2label}
-
     elif model_name == "conformer":
         from conformer.loader import load_conformer_model
         model, classes = load_conformer_model(
@@ -129,18 +124,6 @@ def analyze_ecg_file(filename: str, model_name: str = "mae"):
             seg = ecg[:512] if ecg.size >= 512 else np.pad(ecg, (0, 512-ecg.size))
             pred_ids, _ = runner.predict(seg[np.newaxis, :])
             pred_label = mi["id2label"].get(int(pred_ids[0]), "?")
-
-        elif mtype == "bert":
-            runner = mi["runner"]
-            x = ecg[:256]
-            if x.size < 256:
-                x = np.pad(x, (0, 256-x.size))
-            x = x - x.min()
-            den = (x.max() if x.max() > 0 else 1.0)
-            x = (x / den) * 255.0
-            txt = " ".join(str(int(v)) for v in x)
-            res = runner.predict_texts([txt])[0]
-            pred_label = res["label"]
 
         elif mtype == "conformer":
             from conformer.loader import conformer_predict
@@ -283,8 +266,7 @@ INDEX_HTML = """
         <select id="model" class="form-select form-select-sm" style="width:auto;">
           <option value="mae">MAE</option>
           <option value="conformer">Conformer</option>
-          <option value="bert">BERT</option>
-          <option value="fold4">Fold4</option>
+          <option value="fold4">Bert</option>
         </select>
         <button id="startBtn" class="btn btn-success btn-sm">▶️ Start</button>
         <button id="stopBtn" class="btn btn-danger btn-sm" disabled>⏹ Stop</button>
