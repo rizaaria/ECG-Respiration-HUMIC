@@ -29,9 +29,9 @@ ESP32 (ADS1292R) → Wi-Fi → Flask WebSocket Server → Realtime Dashboard
 ```
 
 ## Web Dashboard Preview
-![Dashboard Preview 1](images/dashboard_preview1.png)
-![Dashboard Preview 2](images/dashboard_preview2.png)
-![Dashboard Preview 3](images/dashboard_preview3.png)
+![Dashboard Preview 1](images/dashboard_1.png)
+![Dashboard Preview 2](images/dashboard_2.png)
+![Dashboard Preview 3](images/dashboard_3.png)
 
 ## Pretrained Models
 
