@@ -1,0 +1,356 @@
+# server_humik2_demo_recordable_v3.py
+import asyncio, threading, time, csv, json, math
+from datetime import datetime
+from pathlib import Path
+from queue import Queue, Empty
+
+import numpy as np
+import pandas as pd
+from scipy.signal import find_peaks
+import websockets
+from flask import Flask, Response, jsonify, request, render_template_string, send_file
+
+# ================== CONFIG ==================
+FLASK_HOST, FLASK_PORT = "0.0.0.0", 5000
+WS_HOST, WS_PORT = "0.0.0.0", 8765
+TRUE_SAMPLING_RATE_HZ = 125.0
+OUT_DIR = Path("recordings"); OUT_DIR.mkdir(exist_ok=True)
+rec_lock = threading.Lock()
+
+# ================== STATE ==================
+recording = False
+demo_mode = False
+csv_file = None
+csv_writer = None
+csv_filename = None
+clients_queues: list[Queue] = []
+
+# ================== BROADCAST ==================
+def broadcast_message(msg: str):
+    for q in clients_queues:
+        try: q.put_nowait(msg)
+        except: pass
+
+# ================== DUMMY SIGNAL ==================
+def ecg_waveform(t):
+    base = 0.5 * math.sin(2 * math.pi * 1.0 * t)
+    spike = 1.5 * math.exp(-((t*10) % 1 - 0.05)**2 / 0.0004)
+    noise = 0.05 * np.random.randn()
+    return base + spike + noise
+
+async def demo_signal_task():
+    """Continuously generate demo ECG when demo_mode=True"""
+    print("[DEMO] Demo generator running...")
+    start_t = time.time()
+    while True:
+        if demo_mode:
+            t = time.time() - start_t
+            ecg_val = ecg_waveform(t)
+            resp_val = 0.4 * math.sin(2 * math.pi * 0.25 * t)
+            payload = {
+                "server_time": time.time(),
+                "esp_millis": t * 1000,
+                "ecg": ecg_val * 400,
+                "resp": resp_val
+            }
+            broadcast_message(json.dumps(payload))
+            # Simpan jika sedang merekam
+            with rec_lock:
+                if recording and csv_writer and csv_file and not csv_file.closed:
+                    csv_writer.writerow([
+                        payload["server_time"], payload["esp_millis"],
+                        payload["ecg"], payload["resp"]
+                    ])
+        await asyncio.sleep(1 / TRUE_SAMPLING_RATE_HZ)
+
+# ================== WEBSOCKET HANDLER ==================
+async def ws_handler(websocket):
+    global recording, csv_writer, csv_file
+    print(f"[WS] Connected: {websocket.remote_address}")
+    try:
+        async for message in websocket:
+            if demo_mode:
+                continue  # abaikan data asli saat demo aktif
+            parts = message.strip().split(",")
+            if len(parts) < 2: continue
+            try:
+                esp_millis = float(parts[0])
+                ecg_val = float(parts[1])
+                resp_val = float(parts[2]) if len(parts) > 2 else 0.0
+            except: continue
+
+            payload = {"server_time": time.time(), "esp_millis": esp_millis, "ecg": ecg_val, "resp": resp_val}
+            broadcast_message(json.dumps(payload))
+
+            with rec_lock:
+                if recording and csv_writer and csv_file and not csv_file.closed:
+                    csv_writer.writerow([payload["server_time"], esp_millis, ecg_val, resp_val])
+    except Exception as e:
+        print("[WS] Error:", e)
+    finally:
+        print(f"[WS] Disconnected: {websocket.remote_address}")
+
+async def ws_server_main():
+    print(f"[WS] Running on ws://{WS_HOST}:{WS_PORT}")
+    async with websockets.serve(ws_handler, WS_HOST, WS_PORT):
+        await asyncio.Future()
+
+def start_ws_server_in_thread():
+    threading.Thread(target=lambda: asyncio.run(ws_server_main()), daemon=True).start()
+    threading.Thread(target=lambda: asyncio.run(demo_signal_task()), daemon=True).start()
+
+# ================== ANALISIS ==================
+def analyze_ecg_file(filename):
+    df = pd.read_csv(filename)
+    if "ecg" not in df.columns:
+        df.columns = ["server_time", "esp_millis", "ecg", "resp"]
+    ecg = df["ecg"].astype(float).to_numpy()
+    resp = df["resp"].astype(float).to_numpy()
+
+    # Durasi real berdasarkan waktu server
+    duration_s = df["server_time"].iloc[-1] - df["server_time"].iloc[0]
+    fs = TRUE_SAMPLING_RATE_HZ
+
+    peaks, _ = find_peaks(ecg, distance=int(fs*0.4), height=np.mean(ecg)+np.std(ecg))
+    bpm = len(peaks) * 60 / duration_s if duration_s > 0 else 0
+    try:
+        rpeaks, _ = find_peaks(resp, distance=int(fs*0.8))
+        rr = len(rpeaks) * 60 / duration_s
+    except:
+        rr = 0
+    if bpm > 100: diagnosis = "Takikardi"
+    elif bpm < 60: diagnosis = "Bradikardi"
+    else: diagnosis = "Normal"
+    return {
+        "filename": filename,
+        "duration_s": round(duration_s, 2),
+        "bpm": round(bpm, 2),
+        "resp_rate": round(rr, 2),
+        "diagnosis": diagnosis,
+        "model_class": "Demo" if demo_mode else "Unknown"
+    }
+
+# ================== FLASK APP ==================
+app = Flask(__name__)
+
+INDEX_HTML = """
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Realtime EKG & Respiration HUMIC</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body{font-family:'Segoe UI',sans-serif;background:#f8f9fa;padding:24px;}
+.card{border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.1);background:#fff;padding:18px;}
+canvas{margin-top:10px;background:#fff;border-radius:10px;border:1px solid #ddd;}
+.controls>*{margin-right:10px;}
+.kpi .val{font-size:26px;font-weight:700;color:#007bff;}
+.kpi .lbl{font-weight:600;color:#444;}
+pre{background:#f8f9fa;border:1px solid #ccc;padding:12px;border-radius:8px;}
+.download-btn{position:absolute;top:18px;right:26px;}
+</style>
+</head>
+
+<body>
+<div class="container position-relative">
+  <div class="card">
+    <button id="downloadBtn" class="btn btn-outline-primary btn-sm download-btn" disabled>📥 Download CSV</button>
+    <h2 class="text-center text-primary fw-bold">Realtime EKG & Respiration HUMIC</h2>
+    <div class="controls d-flex align-items-center mb-3 flex-wrap">
+      <select id="model" class="form-select form-select-sm" style="width:auto;">
+        <option value="mae">MAE</option>
+        <option value="conformer">Conformer</option>
+        <option value="fold4">BERT</option>
+      </select>
+      <button id="startBtn" class="btn btn-success btn-sm">▶️ Start</button>
+      <button id="stopBtn" class="btn btn-danger btn-sm" disabled>⏹ Stop</button>
+      <button id="demoBtn" class="btn btn-warning btn-sm">🧪 Demo Mode OFF</button>
+      <span id="status" class="ms-2 text-secondary">Idle</span>
+      <span id="duration" class="ms-2 text-warning fw-bold"></span>
+    </div>
+
+    <div id="ecgWrap"><canvas id="ecgChart"></canvas></div>
+    <div id="respWrap" class="mt-3"><canvas id="respChart"></canvas></div>
+
+    <hr>
+    <h5>Hasil Analisis Terakhir</h5>
+    <div class="row text-center kpi">
+      <div class="col"><div class="lbl">BPM</div><div id="bpm" class="val">-</div></div>
+      <div class="col"><div class="lbl">Durasi (s)</div><div id="duration_s" class="val">-</div></div>
+      <div class="col"><div class="lbl">RR (rpm)</div><div id="rr" class="val">-</div></div>
+      <div class="col"><div class="lbl">Diagnosa</div><div id="diagnosis" class="val">-</div></div>
+      <div class="col"><div class="lbl">Model</div><div id="model_class" class="val">-</div></div>
+    </div>
+    <pre id="analysis">-</pre>
+  </div>
+</div>
+
+<script>
+const startBtn=document.getElementById('startBtn');
+const stopBtn=document.getElementById('stopBtn');
+const demoBtn=document.getElementById('demoBtn');
+const downloadBtn=document.getElementById('downloadBtn');
+const statusEl=document.getElementById('status');
+const durationEl=document.getElementById('duration');
+
+const ecgCtx=document.getElementById('ecgChart').getContext('2d');
+const respCtx=document.getElementById('respChart').getContext('2d');
+const ecgData={labels:[],datasets:[{label:'ECG',data:[],borderColor:'#00c07f',borderWidth:1,pointRadius:0,tension:0}]};
+const respData={labels:[],datasets:[{label:'Resp',data:[],borderColor:'#3388ff',borderWidth:1,pointRadius:0,tension:0}]};
+
+const ecgChart=new Chart(ecgCtx,{
+  type:'line',
+  data:ecgData,
+  options:{
+    animation:false,responsive:true,maintainAspectRatio:false,
+    scales:{x:{display:true,title:{display:true,text:'Waktu (detik)'}},y:{}},
+    plugins:{legend:{display:false}}
+  }
+});
+const respChart=new Chart(respCtx,{
+  type:'line',
+  data:respData,
+  options:{
+    animation:false,responsive:true,maintainAspectRatio:false,
+    scales:{x:{display:true,title:{display:true,text:'Waktu (detik)'}},y:{}},
+    plugins:{legend:{display:false}}
+  }
+});
+
+let startTime=null;
+const evt=new EventSource('/stream');
+evt.onmessage=e=>{
+  const obj=JSON.parse(e.data);
+  if(startTime===null) startTime=Date.now();
+  const t=(Date.now()-startTime)/1000;
+  ecgData.labels.push(t); ecgData.datasets[0].data.push(obj.ecg);
+  respData.labels.push(t); respData.datasets[0].data.push(obj.resp??0);
+  if(ecgData.labels.length>500){ecgData.labels.shift();ecgData.datasets[0].data.shift();respData.labels.shift();respData.datasets[0].data.shift();}
+  ecgChart.options.scales.y.min=Math.min(...ecgData.datasets[0].data);
+  ecgChart.options.scales.y.max=Math.max(...ecgData.datasets[0].data);
+  respChart.options.scales.y.min=Math.min(...respData.datasets[0].data);
+  respChart.options.scales.y.max=Math.max(...respData.datasets[0].data);
+  ecgChart.update('none'); respChart.update('none');
+};
+
+let recStart=null,durTimer=null;
+function tick(){if(!recStart)return; const s=(Date.now()-recStart)/1000; durationEl.innerText=`Recording: ${s.toFixed(1)} s`;}
+
+// START
+startBtn.onclick=async()=>{
+  startBtn.disabled=true; stopBtn.disabled=true; downloadBtn.disabled=true;
+  const model=document.getElementById('model').value;
+  statusEl.innerText='Starting...';
+  try{
+    const res=await fetch('/start?model='+model,{method:'POST'});
+    await res.json();
+    statusEl.innerText='Recording...'; recStart=Date.now();
+    durTimer=setInterval(tick,200); stopBtn.disabled=false;
+  }catch(e){statusEl.innerText='Failed to start'; startBtn.disabled=false;}
+};
+
+// STOP
+stopBtn.onclick=async()=>{
+  stopBtn.disabled=true; statusEl.innerText='Stopping...';
+  clearInterval(durTimer); recStart=null; durationEl.innerText='';
+  try{
+    const model=document.getElementById('model').value;
+    const res=await fetch('/stop?model='+model,{method:'POST'});
+    const j=await res.json(); statusEl.innerText='Idle'; startBtn.disabled=false; downloadBtn.disabled=false;
+    document.getElementById('bpm').innerText=j.bpm??'-';
+    document.getElementById('duration_s').innerText=j.duration_s??'-';
+    document.getElementById('rr').innerText=j.resp_rate??'-';
+    document.getElementById('diagnosis').innerText=j.diagnosis??'-';
+    document.getElementById('model_class').innerText=j.model_class??'-';
+    document.getElementById('analysis').innerText=JSON.stringify(j,null,2);
+  }catch(e){statusEl.innerText='Stop failed';}
+};
+
+// DEMO MODE
+demoBtn.onclick=async()=>{
+  const res=await fetch('/toggle_demo',{method:'POST'});
+  const j=await res.json();
+  if(j.demo){
+    demoBtn.classList.replace('btn-warning','btn-primary');
+    demoBtn.innerText='🧪 Demo Mode ON';
+    statusEl.innerText='Demo running...';
+  }else{
+    demoBtn.classList.replace('btn-primary','btn-warning');
+    demoBtn.innerText='🧪 Demo Mode OFF';
+    statusEl.innerText='Idle';
+  }
+};
+
+// DOWNLOAD
+downloadBtn.onclick=()=>{window.open('/download_latest','_blank');};
+</script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    return render_template_string(INDEX_HTML)
+
+@app.route("/stream")
+def stream():
+    def gen(q: Queue):
+        try:
+            while True:
+                try: msg=q.get(timeout=1); yield f"data: {msg}\n\n"
+                except Empty: yield ": keep-alive\n\n"
+        finally:
+            try: clients_queues.remove(q)
+            except ValueError: pass
+    q=Queue(); clients_queues.append(q)
+    return Response(gen(q), mimetype="text/event-stream")
+
+@app.route("/start", methods=["POST"])
+def start_record():
+    global recording, csv_file, csv_writer, csv_filename
+    with rec_lock:
+        if recording: return jsonify({"status":"already recording"})
+        prefix = "demo_" if demo_mode else "ecg_"
+        csv_filename = OUT_DIR / f"{prefix}{datetime.now():%Y%m%d_%H%M%S}.csv"
+        csv_file = open(csv_filename, "w", newline="")
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["server_time","esp_millis","ecg","resp"])
+        recording = True
+    print(f"[REC] Started: {csv_filename}")
+    return jsonify({"status":"started","file":str(csv_filename)})
+
+@app.route("/stop", methods=["POST"])
+def stop_record():
+    global recording, csv_file, csv_writer, csv_filename
+    with rec_lock:
+        if not recording:
+            if csv_filename and Path(csv_filename).exists():
+                return jsonify(analyze_ecg_file(str(csv_filename)))
+            return jsonify({"status":"not recording"})
+        recording = False
+        if csv_file and not csv_file.closed: csv_file.close()
+        csv_writer = None
+    print("[REC] Stopped.")
+    return jsonify(analyze_ecg_file(str(csv_filename)))
+
+@app.route("/toggle_demo", methods=["POST"])
+def toggle_demo():
+    global demo_mode
+    demo_mode = not demo_mode
+    print(f"[DEMO] Mode set to: {demo_mode}")
+    return jsonify({"demo": demo_mode})
+
+@app.route("/download_latest")
+def download_latest():
+    global csv_filename
+    if csv_filename and Path(csv_filename).exists():
+        return send_file(csv_filename, as_attachment=True)
+    return "No file available", 404
+
+# ================== MAIN ==================
+if __name__ == "__main__":
+    start_ws_server_in_thread()
+    print(f"[FLASK] Running on http://{FLASK_HOST}:{FLASK_PORT}")
+    app.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True)
