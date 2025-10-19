@@ -312,7 +312,7 @@ INDEX_HTML = """
           title:{ display:true, text:'Waktu (detik)' },
           ticks:{ autoSkip:true, maxTicksLimit:10 }
         },
-        y:{ min:-600, max:600 }
+        y:{ min:-20, max:20 }
       }, 
       plugins:{ legend:{ display:false } } 
     }
@@ -364,8 +364,8 @@ INDEX_HTML = """
     const ecgVals = ecgData.datasets[0].data;
     const ecgMin = Math.min(...ecgVals);
     const ecgMax = Math.max(...ecgVals);
-    ecgChart.options.scales.y.min = Math.min(-600, ecgMin - 50);
-    ecgChart.options.scales.y.max = Math.max(600, ecgMax + 50);
+    ecgChart.options.scales.y.min = Math.min(-20, ecgMin - 50);
+    ecgChart.options.scales.y.max = Math.max(20, ecgMax + 50);
 
     const respVals = respData.datasets[0].data;
     const respMin = Math.min(...respVals);
