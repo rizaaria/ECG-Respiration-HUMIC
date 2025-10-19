@@ -1,7 +1,7 @@
 # Smart-ECG-AI
 **Real-Time ECG and Respiration Monitoring with Multi-Model AI Analysis**
 
-Smart-ECG-AI is a real-time biomedical signal monitoring system that acquires ECG and respiration signals using an ESP32 + ADS1292R module, streams them to a Flask web dashboard via WebSocket, and performs automatic ECG beat classification using multiple deep learning models (MAE, BERT, Conformer).
+ECG-Respiration-HUMIC is a real-time biomedical signal monitoring system that acquires ECG and respiration signals using an ESP32 + ADS1292R module, streams them to a Flask web dashboard via WebSocket, and performs automatic ECG beat classification using multiple deep learning models (MAE, BERT, Conformer).
 
 ---
 
