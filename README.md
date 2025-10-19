@@ -46,5 +46,3 @@ All model weights are stored externally due to GitHub size limitations.
 [Download](https://drive.google.com/drive/folders/1B4qpE2LI5TFhc7Kf0wdkXOwgabYEUR69?usp=sharing) |
 
 After downloading, place each model into its corresponding folder under `/mae/weight/`, `/fold4/weight/`, `/conformer/weight/`, and `/bert/weight/`.
-
-Use ECG_HUMIK2.py
